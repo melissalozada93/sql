@@ -1,0 +1,50 @@
+USE [DWCOOPAC]
+GO
+/****** Object:  StoredProcedure [dbo].[usp_dasha_colaboradores]    Script Date: 14/03/2024 11:23:16 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+ALTER procedure [dbo].[usp_dwt_InsertarSocioNikkei]
+
+as
+
+
+DROP TABLE IF EXISTS WT_SOCIOSNIKKEI
+SELECT 
+	DISTINCT CODIGOPERSONA,CIP,NOMBRECOMPLETO
+INTO WT_SOCIOSNIKKEI
+FROM 
+	DW_PERSONA  
+WHERE CIP IN (
+	SELECT CODIGOSOCIO FROM DW_DATOSSOCIO
+	WHERE NIKEN IN (1))
+
+IF (
+    SELECT COUNT(*) 
+    FROM (
+        SELECT 
+            A.CODIGOSOCIO
+        FROM 
+            TEMP_WT_SOCIOSNIKKEI A 
+        LEFT JOIN 
+            WT_SOCIOSNIKKEI B ON A.CODIGOSOCIO = B.CIP 
+        WHERE 
+            B.CODIGOPERSONA IS NULL
+    ) AS subquery
+) = 0
+BEGIN
+	  print 'No se inserta ningún registro'
+END
+ELSE
+BEGIN
+	INSERT INTO WT_SOCIOSNIKKEI
+    SELECT 
+           DISTINCT B.CODIGOPERSONA, B.CIP, B.NOMBRECOMPLETO 
+        FROM 
+            TEMP_WT_SOCIOSNIKKEI A 
+        LEFT JOIN 
+            DW_PERSONA B ON A.CODIGOSOCIO = B.CIP 
+END
+

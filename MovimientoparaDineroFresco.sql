@@ -1,0 +1,109 @@
+-- Utilizar la base de datos DWCOOPAC
+USE [DWCOOPAC];
+
+-- Declarar la fecha de la tabla FECHAMAESTRA
+DECLARE @FECHA DATE;
+SET @FECHA = (SELECT FECHA FROM [DWCOOPAC].dbo.ST_FECHAMAESTRA);
+
+DECLARE @FECHA7 DATE;
+SET @FECHA7 = (SELECT DATEADD(DAY, -7, FECHA )FROM [DWCOOPAC].dbo.ST_FECHAMAESTRA);
+
+-- Eliminar la tabla temporal si existe
+DROP TABLE IF EXISTS #REPORTEDINEROFRESCO;
+
+-- Seleccionar los datos y almacenarlos en la tabla temporal #REPORTEDINEROFRESCO
+SELECT
+    cc.CODIGOPERSONA AS CodSocio,
+    per.NOMBRECOMPLETO AS NombreCompleto,
+    UPPER(RIGHT(cc.MONEDADESCRI,1)) Moneda,
+    a.NumeroCuenta,
+    a.importe1 AS Importe,
+    a.PeriodoCaja,
+    a.NumeroCaja,
+    a.Observacion,
+    s90.TBLDESCRI AS FormaPago,
+    CASE
+        WHEN a.formapago = 1 THEN 'Efectivo'
+        WHEN a.formapago = 3 THEN 'Bancos'
+        WHEN a.formapago = 2 THEN 'Cheque'
+        WHEN a.formapago = 8 THEN 'Nota Abono'
+    END AS FormaPagoFinal,
+    a.FechaUsuario,
+	A.CODIGOUSUARIO
+INTO #REPORTEDINEROFRESCO
+FROM
+    DW_CUENTAMOVIMIENTO  (NOLOCK) a
+INNER JOIN
+    VW_CUENTACORRIENTE cc ON cc.numerocuenta = a.numerocuenta
+LEFT JOIN 
+    DW_PERSONA (NOLOCK) per ON cc.CODIGOPERSONA = per.CODIGOPERSONA
+LEFT JOIN
+    DW_SYST900 s90 (NOLOCK) ON a.FORMAPAGO = s90.TBLCODARG AND s90.TBLCODTAB = 21
+WHERE
+    a.periodocaja = FORMAT(@FECHA7, 'yyyyMM')
+    AND CAST(a.fechausuario AS DATE) BETWEEN @FECHA7 AND @FECHA
+    AND (
+        a.observacion LIKE '%DEPOSITO EN CUENTA%'
+        OR a.observacion LIKE '%REMESA KYODAI%'
+        OR a.observacion LIKE '%22889%'
+        OR a.observacion LIKE '%12117%'
+        OR a.observacion LIKE '%Liberacion de Cheque%'
+    )
+    AND a.estado = 1
+    AND a.tipomovimiento IN (1, 3, 5, 7)
+    AND a.formapago IN (1, 2, 3, 8)
+    AND cc.PRODUCTOCODIGO = 'AHV'
+    AND a.codigousuario NOT IN (SELECT DISTINCT [KEY] FROM ST_TABLA_SOPORTE WHERE Comentario='Dinero fresco')
+    AND a.codigoagencia NOT IN (9, 12)
+    AND cc.dw_fechaCarga = @FECHA
+	AND per.dw_fechaCarga = @FECHA;
+
+
+	
+
+
+DROP TABLE IF EXISTS #SALDO
+	SELECT 
+	 NUMEROCUENTA
+   , UPPER(RIGHT(MONEDADESCRI,1)) MONEDA
+   , SUM(SALDOIMPORTE1)[SALDO] 
+INTO #SALDO
+   FROM DW_CUENTACORRIENTE 
+   WHERE dw_fechaCarga=@FECHA7 AND NUMEROCUENTA IN (SELECT DISTINCT NUMEROCUENTA FROM #REPORTEDINEROFRESCO)
+   GROUP BY NUMEROCUENTA,RIGHT(MONEDADESCRI,1)
+
+
+	SELECT 
+	 CODSOCIO
+   , NUMEROCUENTA
+   , SUM(IMPORTE)INGRESO 
+    FROM #REPORTEDINEROFRESCO
+	GROUP BY CODSOCIO,NUMEROCUENTA
+
+-- Eliminar la tabla temporal
+-- DROP TABLE IF EXISTS #REPORTEDINEROFRESCO;
+
+-- Seleccionar datos de la tabla DW_SYST900 donde TBLCODTAB es 21
+-- SELECT * FROM DW_SYST900 WHERE TBLCODTAB = 21;
+
+
+SELECT COUNT(*), COUNT(DISTINCT NUMEROCAJA), COUNT(DISTINCT NUMEROCUENTA), COUNT(DISTINCT CodSocio) FROM #REPORTEDINEROFRESCO;
+
+SELECT DISTINCT NUMEROCUENTA, FECHAUSUARIO FROM #REPORTEDINEROFRESCO; ---1420
+
+SELECT * FROM #REPORTEDINEROFRESCO where NUMEROCUENTA='000400312005';
+
+
+SELECT NUMEROCUENTA,  COUNT(*) AS CUENTA
+FROM #REPORTEDINEROFRESCO
+GROUP BY NUMEROCUENTA
+HAVING COUNT(*) > 1;
+
+SELECT * FROM DW_DATOSCUENTACORRIENTE
+
+--select * from ST_TABLA_SOPORTE
+
+--SELECT * FROM DW_SYST900
+--WHERE TBLCODTAB IN (1091,1092,1093)
+
+-- 7,6,2,1,

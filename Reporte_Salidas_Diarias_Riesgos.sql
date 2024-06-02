@@ -1,0 +1,102 @@
+USE [DWCOOPAC]
+GO
+/****** Object:  StoredProcedure [dbo].[usp_dasha_colaboradores]    Script Date: 14/03/2024 11:23:16 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+create procedure [dbo].[usp_dwt_reporte_salidas_diarias]
+as
+
+DECLARE @TC DECIMAL(15,3) = (select promedio from DW_XTIPOCAMBIO where fecha = (select fecha from st_fechamaestra where estado = 1) and codigoTipoCambio = 3)
+
+
+---------Obtener agencias-----------------------------------------------------
+DROP TABLE IF EXISTS #AGENCIAS;
+SELECT *
+INTO #AGENCIAS
+FROM(
+	SELECT 
+		FECHA=FECHAUSUARIO,
+		CODIGO,
+		NOMBRECOMPLETO,
+		CODIGOAGENCIANOM,
+		N=ROW_NUMBER() OVER (PARTITION BY CODIGO ORDER BY HORA)
+	FROM 
+		WT_REPORTE6
+	WHERE 
+		CONVERT(DATE, FECHAUSUARIO) = CONVERT(DATE, GETDATE())
+		AND TIPOPERSONADESCRI = 'Persona Natural'
+		AND TIPOMOVIMIENTO = 'SALIDA') A
+WHERE A.N=1
+
+---------Listar las formas de pago-----------------------------------------------------
+DROP TABLE IF EXISTS #FORMAPAGO;
+SELECT 'Cheque' AS FORMAPAGO 
+INTO #FORMAPAGO
+UNION ALL
+SELECT 'Efectivo'
+UNION ALL
+SELECT 'Transf. Bancaria';
+
+
+-------Traer los datos necesarios del reporte 6 con los filtros necesarios-------------
+DROP TABLE IF EXISTS #REPORTE6;
+SELECT 
+	CODIGOSOCIO=CODIGO,
+	NUMEROCUENTA,
+    NOMBRECOMPLETO,
+	PRODUCTO,
+    FORMAPAGO,
+	MONEDA,
+	IMPORTE,
+	FECHA=FECHAUSUARIO,
+	HORA=CONVERT(TIME(0), HORA),
+	AGENCIA=CODIGOAGENCIANOM,
+	USUARIO=CODIGOUSUARIO,
+	OBSERVACION
+INTO #REPORTE6
+FROM 
+    WT_REPORTE6
+WHERE 
+    TIPOPERSONADESCRI = 'Persona Natural'
+    AND TIPOMOVIMIENTO = 'SALIDA'
+    AND FORMAPAGO IN ('Efectivo', 'Cheque')
+    AND PRODUCTO IN ('AHV', 'CDE', 'AHC', 'AHP', 'AHF', 'CDE', 'CDJ', 'CDP')
+
+
+
+
+-------Traer los datos necesarios del reporte 66 con los filtros necesarios-------------
+DROP TABLE IF EXISTS #REPORTE66;
+SELECT 
+	CODIGOSOCIO,
+	NUMEROCUENTA,
+    NOMBRECOMPLETO=nombres,
+	PRODUCTO='',
+    FORMAPAGO='Transf. Bancaria',
+	MONEDA=IIF(MONEDA=1,'S','D'),
+	IMPORTE=IMPORTESOLICITUD,
+	FECHA=FECHASOLICITUDTRUNCADA,
+	HORA=CONVERT(TIME(0), HORALIQUIDA),
+	AGENCIA=AGENCIA2,
+	USUARIO='',
+	OBSERVACION=''
+INTO #REPORTE66
+FROM 
+    WT_REPORTE66
+WHERE
+	DESCESTADO = 'Liquidado'
+	AND PERSONERIA = 'Natural'
+
+
+DROP TABLE IF EXISTS WT_REPORTE_SALIDAS_RIESGOS
+SELECT * 
+INTO WT_REPORTE_SALIDAS_RIESGOS
+FROM #REPORTE6
+UNION
+SELECT * FROM #REPORTE66
+
+
+--SELECT * FROM WT_REPORTE_SALIDAS_RIESGOS

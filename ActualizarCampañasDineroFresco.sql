@@ -1,0 +1,44 @@
+USE [DWCOOPAC]
+GO
+/****** Object:  StoredProcedure [dbo].[usp_dwt_actualizar_dinerofresco]    Script Date: 22/05/2024 16:53:39 ******/
+--SET ANSI_NULLS ON
+--GO
+--SET QUOTED_IDENTIFIER ON
+--GO
+
+--create procedure [dbo].[usp_dwt_actualizar_campañas_dinerofresco]
+--as
+
+
+UPDATE D
+
+SET	 CAMPAÑA = CASE WHEN TPERSON IN (
+                                SELECT DISTINCT VARIABLE
+                                FROM [dbo].[ST_CAMPANAS_DPF_DETALLE]
+                                WHERE CAMPANA = C.CAMPANA AND CARACTERISTICA = 'TPERSON') AND
+							SUBPRODUCTO IN (
+                                SELECT DISTINCT VARIABLE
+                                FROM [dbo].[ST_CAMPANAS_DPF_DETALLE]
+                                WHERE CAMPANA = C.CAMPANA AND CARACTERISTICA = 'SUBPRODUCTO' AND tasaintanualapert=VALOR3  AND D.MONTOINICIAL >= VALOR1 AND D.MONTOINICIAL<=VALOR2 )
+					  THEN  C.CAMPANA ELSE NULL END ,
+	PROD_SOLES = IIF(D.SUBPRODUCTO IN (SELECT DISTINCT VARIABLE
+										FROM [dbo].[ST_CAMPANAS_DPF_DETALLE]
+										WHERE CAMPANA = C.CAMPANA AND CARACTERISTICA = 'SUBPRODUCTO' AND VARIABLE LIKE '%SOLES%'),'SI','NO'),
+	PROD_DOLARES = IIF(D.SUBPRODUCTO IN (SELECT DISTINCT VARIABLE
+										FROM [dbo].[ST_CAMPANAS_DPF_DETALLE]
+										WHERE CAMPANA = C.CAMPANA AND CARACTERISTICA = 'SUBPRODUCTO' AND VARIABLE LIKE '%DOLARES%'),'SI','NO'),
+	INICIO_CAMAPAÑA= CASE WHEN TPERSON IN (
+                                SELECT DISTINCT VARIABLE
+                                FROM [dbo].[ST_CAMPANAS_DPF_DETALLE]
+                                WHERE CAMPANA = C.CAMPANA AND CARACTERISTICA = 'TPERSON') AND
+							SUBPRODUCTO IN (
+                                SELECT DISTINCT VARIABLE
+                                FROM [dbo].[ST_CAMPANAS_DPF_DETALLE]
+                                WHERE CAMPANA = C.CAMPANA AND CARACTERISTICA = 'SUBPRODUCTO'  AND tasaintanualapert=VALOR3 AND D.MONTOINICIAL >= VALOR1 AND D.MONTOINICIAL<=VALOR2 )
+								THEN  C.INICIO ELSE NULL END 
+FROM WT_DINERO_FRESCO_DPF  D
+LEFT JOIN  [dbo].[ST_CAMPANAS_DPF] C ON D.fechaapertura BETWEEN C.INICIO AND C.FIN
+WHERE C.CAMPANA='16/05 al 15/06'
+
+
+--SELECT * FROM [ST_CAMPANAS_DPF]
